@@ -72,7 +72,7 @@ class BandePassante(Metric):
     def calculer(self) -> tuple[float, float]:
         logger.info(f"Calculating bandwidth for host: {self.host.name} ({self.host.ip})")
         try:
-            st = speedtest.Speedtest()
+            st = speedtest.Speedtest(source_address=self.host.ip, secure=True)
             logger.info("Starting download speed test")
             download = st.download() / 1_000_000  # Convert to Mbps
             logger.info(f"Download speed: {download:.2f} Mbps")
@@ -138,6 +138,18 @@ class Database:
         with self.conn:
             cursor = self.conn.execute('SELECT id, name, ip FROM hosts')
             return [Host(id=row[0], name=row[1], ip=row[2]) for row in cursor.fetchall()]
+        
+    def host_exists(self, ip: str) -> bool:
+        logger.info(f"Checking if host exists: {ip}")
+        with self.conn:
+            cursor = self.conn.execute('SELECT id FROM hosts WHERE ip = ?', (ip,))
+            result = cursor.fetchone()
+            if result:
+                logger.info(f"Host exists: {ip}")
+                return True
+            else:
+                logger.info(f"Host does not exist: {ip}")
+                return False
 
     def add_latence(self, host_id: int, date: datetime, valeur: float, packets_perdus: int):
         logger.info(f"Adding latency data for host_id {host_id}: {valeur}ms, {packets_perdus}% packets lost")
