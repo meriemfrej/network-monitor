@@ -1,4 +1,3 @@
-import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QLabel, QLineEdit, QPushButton, QGroupBox,
                             QListWidget, QMessageBox, QInputDialog, QTableWidget, 
@@ -10,10 +9,10 @@ from datetime import datetime
 import logging
 from history_window import HistoryWindow
 from packet_capture import PacketCaptureWidget
-from anomaly_detection import AnomalyDetection
 from network_scan import NetworkScannerWidget
 from service_os_detection import ServiceOSDetection
-from alert_system import AlertSystem # Added import
+from alert_system import AlertSystem
+from traceroute_window import TracerouteVisualization
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -221,18 +220,21 @@ class MainWindow(QMainWindow):
         self.packet_capture_button = QPushButton("Packet Capture")
         self.packet_capture_button.clicked.connect(self.show_packet_capture)
         self.anomaly_detection_button = QPushButton("Détection d'Anomalies")
-        self.anomaly_detection_button.clicked.connect(self.show_anomaly_detection)
+        self.anomaly_detection_button.clicked.connect(self.show_service_os_detection)
         self.network_scan_button = QPushButton("Scan Réseau")
         self.network_scan_button.clicked.connect(self.show_network_scan)
+        self.traceroute_button = QPushButton("Traceroute")
+        self.traceroute_button.clicked.connect(self.show_traceroute)
         self.service_os_detection_button = QPushButton("Détection Services/OS")
         self.service_os_detection_button.clicked.connect(self.show_service_os_detection)
 
         self.button_layout.addWidget(self.packet_capture_button)
         self.button_layout.addWidget(self.anomaly_detection_button)
         
-        self.button_layout.addWidget(self.service_os_detection_button)
+        #self.button_layout.addWidget(self.service_os_detection_button)
 
         config_layout.addWidget(self.network_scan_button)
+        config_layout.addWidget(self.traceroute_button)
     
 
         metrics_layout.addLayout(self.admin_button_layout)
@@ -247,6 +249,7 @@ class MainWindow(QMainWindow):
         self.anomaly_detection_button.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxWarning))
         self.network_scan_button.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
         self.service_os_detection_button.setIcon(self.style().standardIcon(QStyle.SP_DriveHDIcon))
+        self.traceroute_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowRight))
 
 
         # Initially hide the buttons
@@ -259,10 +262,10 @@ class MainWindow(QMainWindow):
         self.service_os_detection_button.hide()
         
         # Timer pour les mises à jour automatiques
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.automatic_update)
-        self.timer.start(60000)  # Mise à jour toutes les 60 secondes
-        logger.info("Automatic update timer started (60 second interval)")
+        # self.timer = QTimer()
+        # self.timer.timeout.connect(self.automatic_update)
+        # self.timer.start(60000)  # Mise à jour toutes les 60 secondes
+        # logger.info("Automatic update timer started (60 second interval)")
         
         self.load_hosts()
         
@@ -357,7 +360,7 @@ class MainWindow(QMainWindow):
             self.packet_capture_button.show()
             self.anomaly_detection_button.show()
            
-            self.service_os_detection_button.show()
+            #self.service_os_detection_button.show()
             self.reinitialize_metrics()
         else:
             self.selected_host_label.setText("Hôte sélectionné: Aucun")
@@ -369,7 +372,7 @@ class MainWindow(QMainWindow):
             self.packet_capture_button.hide()
             self.anomaly_detection_button.hide()
         
-            self.service_os_detection_button.hide()
+            #self.service_os_detection_button.hide()
             self.reinitialize_metrics()
     
     def reinitialize_metrics(self):
@@ -468,13 +471,17 @@ class MainWindow(QMainWindow):
         self.packet_capture_widget = PacketCaptureWidget(host_ip) 
         self.packet_capture_widget.show()
         self.packet_capture_widget.start_capture()
-    def show_anomaly_detection(self):
-        self.anomaly_detection_window = AnomalyDetection()
-        self.anomaly_detection_window.show()
+    # def show_anomaly_detection(self):
+    #     self.anomaly_detection_window = AnomalyDetection()
+    #     self.anomaly_detection_window.show()
 
     def show_network_scan(self):
         self.network_scan_window = NetworkScannerWidget()
         self.network_scan_window.show()
+
+    def show_traceroute(self):
+        self.traceroute_window = TracerouteVisualization()
+        self.traceroute_window.show()
 
     def show_service_os_detection(self):
         _, host_ip = self.selected_host.split(' (')

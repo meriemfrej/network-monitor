@@ -1,7 +1,7 @@
-from scapy.all import sniff, IP, TCP, UDP
+from scapy.all import sniff, IP, TCP, UDP, ICMP, ARP
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
-from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QVBoxLayout, QAbstractItemView, QHeaderView
-from PyQt5.QtGui import  QPalette, QColor
+from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHBoxLayout, QAbstractItemView, QHeaderView, QListWidget, QListWidgetItem
+from PyQt5.QtGui import QPalette, QColor
 
 class PacketCapture(QObject):
     packet_captured = pyqtSignal(dict)
@@ -24,31 +24,38 @@ class PacketCapture(QObject):
         self.sniff_thread.wait()
 
     def process_packet(self, packet):
+        packet_info = {
+            "source": packet[IP].src if IP in packet else packet.src,
+            "destination": packet[IP].dst if IP in packet else packet.dst,
+            "protocol": "Unknown",
+            "sport": None,
+            "dport": None,
+            "tcp_flags": None
+        }
+
         if IP in packet:
-            packet_info = {
-                "source": packet[IP].src,
-                "destination": packet[IP].dst,
-            }
-            if packet[IP].proto == 6:
-                packet_info["protocol"] = "TCP"
-            elif packet[IP].proto == 17:
-                packet_info["protocol"] = "UDP"
-            else:
-                packet_info["protocol"] = "Other"
             if TCP in packet:
-             
+                packet_info["protocol"] = "TCP"
                 packet_info["sport"] = packet[TCP].sport
                 packet_info["dport"] = packet[TCP].dport
+                packet_info["tcp_flags"] = packet[TCP].flags
             elif UDP in packet:
-              
+                packet_info["protocol"] = "UDP"
                 packet_info["sport"] = packet[UDP].sport
                 packet_info["dport"] = packet[UDP].dport
-            else:
-                packet_info["sport"] = None
-                packet_info["dport"] = None
-            
-            self.packet_captured.emit(packet_info)
-            self.packet_list.addItem(str(packet_info))
+            elif ICMP in packet:
+                packet_info["protocol"] = "ICMP"
+        elif ARP in packet:
+            packet_info["protocol"] = "ARP"
+        
+        if packet_info["protocol"] in ["TCP", "UDP"]:
+            if packet_info["sport"] == 110 or packet_info["dport"] == 110:
+                packet_info["protocol"] = "POP"
+            elif packet_info["sport"] == 25 or packet_info["dport"] == 25:
+                packet_info["protocol"] = "SMTP"
+
+        self.packet_captured.emit(packet_info)
+        self.packet_list.addItem(str(packet_info))
 
     def get_packet_list(self):
         return self.packet_list
@@ -68,26 +75,42 @@ class SniffThread(QThread):
         if self.packet_count >= self.packet_capture.max_packets:
             self.quit()
 
-
 class PacketCaptureWidget(QWidget):
     def __init__(self, target_ip):
         super().__init__()
         self.packet_capture = PacketCapture(target_ip)
         self.packet_table = QTableWidget()
-        self.packet_table.setColumnCount(5)
+        self.packet_table.setColumnCount(6)
         self.packet_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.packet_table.setHorizontalHeaderLabels(["Source IP", "Source Port", "Destination IP", "Destination Port", "Protocol"])
+        self.packet_table.setHorizontalHeaderLabels(["Source IP", "Source Port", "Destination IP", "Destination Port", "Protocol", "TCP Flags"])
         header = self.packet_table.horizontalHeader()       
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.Stretch)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
-        layout = QVBoxLayout()
-        layout.addWidget(self.packet_table)
-        self.setLayout(layout)
-        self.setWindowTitle("Captures Des Packets")
-        self.setMinimumSize(1000, 800)
+        for i in range(6):
+            header.setSectionResizeMode(i, QHeaderView.Stretch)
+
+        # Create protocol filter list
+        self.protocol_list = QListWidget()
+        self.protocol_list.setSelectionMode(QAbstractItemView.MultiSelection)
+        protocols = ["UDP", "TCP", "ICMP", "ARP", "POP", "SMTP"]
+        for protocol in protocols:
+            item = QListWidgetItem(protocol)
+            self.protocol_list.addItem(item)
+        self.protocol_list.itemSelectionChanged.connect(self.filter_packets)
+
+        # Create layouts
+        filter_layout = QVBoxLayout()
+        filter_layout.addWidget(self.protocol_list)
+
+        table_layout = QVBoxLayout()
+        table_layout.addWidget(self.packet_table)
+
+        main_layout = QHBoxLayout()
+        main_layout.addLayout(filter_layout, 1)
+        main_layout.addLayout(table_layout, 3)
+
+        self.setLayout(main_layout)
+
+        self.setWindowTitle("Packet Capture")
+        self.setMinimumSize(1200, 800)
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #f5f5f5;
@@ -106,21 +129,6 @@ class PacketCaptureWidget(QWidget):
                 padding: 0 5px 0 5px;
                 color: #3498db;
             }
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 4px;
-                font-weight: bold;
-                transition: background-color 0.3s;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #2573a7;
-            }
             QTableWidget {
                 gridline-color: #d3d3d3;
                 background-color: #ffffff;
@@ -134,12 +142,6 @@ class PacketCaptureWidget(QWidget):
                 border: 1px solid #2980b9;
                 font-weight: bold;
             }
-            QLineEdit {
-                border: 1px solid #3498db;
-                border-radius: 4px;
-                padding: 5px;
-                background-color: #ffffff;
-            }
             QListWidget {
                 border: 1px solid #3498db;
                 border-radius: 4px;
@@ -150,12 +152,9 @@ class PacketCaptureWidget(QWidget):
             }
         """)
 
-
         palette = self.palette()
-       
         palette.setColor(QPalette.Button, QColor(52, 152, 219))
         palette.setColor(QPalette.ButtonText, QColor(255, 255, 255))
-        
         self.setPalette(palette)
 
     def start_capture(self):
@@ -166,7 +165,6 @@ class PacketCaptureWidget(QWidget):
         self.packet_capture.stop_capture()
 
     def add_packet_to_table(self, packet_info):
-   
         row = self.packet_table.rowCount()
         self.packet_table.insertRow(row)
         self.packet_table.setItem(row, 0, QTableWidgetItem(str(packet_info["source"])))
@@ -174,3 +172,11 @@ class PacketCaptureWidget(QWidget):
         self.packet_table.setItem(row, 2, QTableWidgetItem(str(packet_info["destination"])))
         self.packet_table.setItem(row, 3, QTableWidgetItem(str(packet_info["dport"])))
         self.packet_table.setItem(row, 4, QTableWidgetItem(str(packet_info["protocol"])))
+        self.packet_table.setItem(row, 5, QTableWidgetItem(str(packet_info["tcp_flags"])))
+        self.filter_packets()
+
+    def filter_packets(self):
+        selected_protocols = [item.text() for item in self.protocol_list.selectedItems()]
+        for row in range(self.packet_table.rowCount()):
+            protocol = self.packet_table.item(row, 4).text()
+            self.packet_table.setRowHidden(row, len(selected_protocols) > 0 and protocol not in selected_protocols)

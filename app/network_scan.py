@@ -35,8 +35,30 @@ class NetworkScanner(QWidget):
                     'version': self.nm[ip]['tcp'][port]['version']
                 })
         return open_ports
+    
+    def scan_ports_anomaly(self, ip, port_range):
+        self.nm.scan(ip, arguments=f'-p {port_range}')
+        port_status = []
+        start_port, end_port = map(int, port_range.split('-'))
+        for port in range(start_port, end_port+1):
+            if port in self.nm[ip]['tcp']:
+                status = self.nm[ip]['tcp'][port]['state']
+                service = self.nm[ip]['tcp'][port]['name']
+                version = self.nm[ip]['tcp'][port]['version']
+            else:
+                status = 'closed'
+                service = ''
+                version = ''
+            port_status.append({
+                'port': port,
+                'status': status,
+                'service': service,
+                'version': version
+            })
+        return port_status
 
     def detect_os(self, ip):
+        
         self.nm.scan(ip, arguments='-O')
         if 'osmatch' in self.nm[ip]:
             return self.nm[ip]['osmatch'][0]['name']
