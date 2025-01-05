@@ -1,6 +1,7 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView, QStyle, QAbstractItemView
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView, QStyle, QAbstractItemView, QDialog
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import  QIcon, QPalette, QColor
+from PyQt5.QtGui import QIcon, QPalette, QColor
+import pyqtgraph as pg
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,13 +20,23 @@ class HistoryWindow(QWidget):
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["Date", "Latence (ms)", "Paquets perdus (%)", "Upload (Mbps)", "Download (Mbps)"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.cellClicked.connect(self.cell_clicked)
         layout.addWidget(self.table)
         self.setLayout(layout)
         self.setWindowIcon(QIcon('icons/history.png'))
 
-        self.setWindowTitle("Scan Réseau")
+        self.setWindowTitle("Historique")
         self.setMinimumSize(1000, 800)
 
+        self.apply_styles()
+
+        palette = self.palette()
+        palette.setColor(QPalette.Button, QColor(52, 152, 219))
+        palette.setColor(QPalette.ButtonText, QColor(255, 255, 255))
+        self.setPalette(palette)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
+    def apply_styles(self):
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #f5f5f5;
@@ -88,15 +99,6 @@ class HistoryWindow(QWidget):
             }
         """)
 
-
-        palette = self.palette()
-       
-        palette.setColor(QPalette.Button, QColor(52, 152, 219))
-        palette.setColor(QPalette.ButtonText, QColor(255, 255, 255))
-        
-        self.setPalette(palette)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-
     def load_history(self):
         logger.info(f"Loading history for host: {self.host_name}")
         host_id = self.db.get_host_id(self.host_name)
@@ -107,7 +109,6 @@ class HistoryWindow(QWidget):
         latency_data = self.db.get_latency_history(host_id)
         bandwidth_data = self.db.get_bandwidth_history(host_id)
 
-        # Combine latency and bandwidth data
         combined_data = {}
         for date, latency, packets_lost in latency_data:
             combined_data[date] = [latency, packets_lost, None, None]
@@ -117,7 +118,6 @@ class HistoryWindow(QWidget):
             else:
                 combined_data[date] = [None, None, upload, download]
 
-        # Sort by date (newest first)
         sorted_data = sorted(combined_data.items(), key=lambda x: x[0], reverse=True)
 
         self.table.setRowCount(len(sorted_data))
@@ -137,4 +137,51 @@ class HistoryWindow(QWidget):
                 self.table.setItem(row, col, item)
 
         logger.info(f"Loaded {len(sorted_data)} historical records for {self.host_name}")
+
+    def cell_clicked(self, row, column):
+        if column == 0:  # Date column
+            return
+
+        value = self.table.item(row, column).text()
+        
+        if value == "N/A":
+            return
+
+        column_names = ["Date", "Latence", "Paquets perdus", "Upload", "Download"]
+        column_name = column_names[column]
+
+        self.plot_curve(column)
+
+    def plot_curve(self, column):
+        dates = []
+        values = []
+        for row in range(self.table.rowCount()):
+            date_item = self.table.item(row, 0)
+            value_item = self.table.item(row, column)
+            if date_item and value_item and value_item.text() != "N/A":
+                dates.append(date_item.text())
+                values.append(float(value_item.text()))
+
+        dates.reverse()
+        values.reverse()
+
+        plot_window = QDialog(self)
+        plot_window.setWindowTitle(f"Courbe - {self.table.horizontalHeaderItem(column).text()}")
+        plot_window.setMinimumSize(800, 600)
+
+        layout = QVBoxLayout()
+        plot_widget = pg.PlotWidget()
+        plot_widget.setBackground('k')  # fond noir
+        plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        layout.addWidget(plot_widget)
+        plot_window.setLayout(layout)
+
+        plot_widget.plot(x=[i for i in range(len(dates))], y=values, pen=pg.mkPen(color=(52, 152, 219), width=2))
+        plot_widget.setLabel('left', self.table.horizontalHeaderItem(column).text())
+        plot_widget.setLabel('bottom', 'Date')
+
+        ax = plot_widget.getAxis('bottom')
+        ax.setTicks([[(i, date) for i, date in enumerate(dates[::max(1, len(dates)//10)])]])
+
+        plot_window.show()
 
