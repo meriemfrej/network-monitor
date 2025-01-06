@@ -24,7 +24,7 @@ class TracerouteThread(QThread):
         try:
             process = subprocess.Popen(["tracert", "-4", self.target], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
             for line in process.stdout:
-                self.log_signal.emit(line.strip())
+                self.log_signal.emit(line.strip().encode("utf-8").decode("utf-8", errors="replace"))
                 match = re.search(r'^\s*(\d+)(?:\s+(<?\d+\s*ms|\*)\s+(<?\d+\s*ms|\*)\s+(<?\d+\s*ms|\*))+\s+(.+)$', line)
                 if match:
                     hop_number = int(match.group(1))

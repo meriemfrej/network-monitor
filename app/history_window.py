@@ -3,6 +3,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QPalette, QColor
 import pyqtgraph as pg
 import logging
+from datetime import datetime
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +64,7 @@ class HistoryWindow(QWidget):
                 padding: 8px 15px;
                 border-radius: 4px;
                 font-weight: bold;
-                transition: background-color 0.3s;
+                
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -150,6 +152,8 @@ class HistoryWindow(QWidget):
         column_names = ["Date", "Latence", "Paquets perdus", "Upload", "Download"]
         column_name = column_names[column]
 
+
+        
         self.plot_curve(column)
 
     def plot_curve(self, column):
@@ -165,23 +169,90 @@ class HistoryWindow(QWidget):
         dates.reverse()
         values.reverse()
 
-        plot_window = QDialog(self)
-        plot_window.setWindowTitle(f"Courbe - {self.table.horizontalHeaderItem(column).text()}")
-        plot_window.setMinimumSize(800, 600)
+        plot_window = PlotWindow(self, column, dates, values)
+        plot_window.show()
+
+class PlotWindow(QDialog):
+    def __init__(self, parent, column, dates, values, scale_minutes=1):
+        super().__init__(parent)
+        self.setWindowTitle(f"Courbe - {parent.table.horizontalHeaderItem(column).text()}")
+        self.setMinimumSize(800, 600)
 
         layout = QVBoxLayout()
         plot_widget = pg.PlotWidget()
         plot_widget.setBackground('k')  # fond noir
         plot_widget.showGrid(x=True, y=True, alpha=0.3)
         layout.addWidget(plot_widget)
-        plot_window.setLayout(layout)
+        self.setLayout(layout)
 
-        plot_widget.plot(x=[i for i in range(len(dates))], y=values, pen=pg.mkPen(color=(52, 152, 219), width=2))
-        plot_widget.setLabel('left', self.table.horizontalHeaderItem(column).text())
-        plot_widget.setLabel('bottom', 'Date')
+        # Convert dates to timestamps for plotting
+        timestamps = []
+        for date in dates:
+            try:
+                dt = datetime.strptime(date, "%Y-%m-%d %H:%M:%S.%f")
+            except ValueError:
+                try:
+                    dt = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    try:
+                        dt = datetime.strptime(date, "%Y-%m-%d")
+                    except ValueError:
+                        print(f"Could not parse date: {date}")
+                        continue
+            timestamps.append(dt.timestamp())
 
+        # Plot the data
+        plot_widget.plot(x=timestamps, y=values, pen=pg.mkPen(color=(52, 152, 219), width=2))
+
+        plot_widget.setLabel('left', parent.table.horizontalHeaderItem(column).text())
+        plot_widget.setLabel('bottom', f'Date and Time ({scale_minutes}-minute intervals)')
+
+        # Customize x-axis
         ax = plot_widget.getAxis('bottom')
-        ax.setTicks([[(i, date) for i, date in enumerate(dates[::max(1, len(dates)//10)])]])
+        ax.setStyle(tickTextOffset=10)
 
-        plot_window.show()
+        # Create a function to format dates based on the scale
+        def timestamp_to_str(timestamp):
+            dt = datetime.fromtimestamp(timestamp)
+            if scale_minutes < 60:
+                return dt.strftime("%Y-%m-%d %H:%M")
+            elif scale_minutes < 1440:  # Less than a day
+                return dt.strftime("%Y-%m-%d %H:00")
+            else:
+                return dt.strftime("%Y-%m-%d")
 
+        # Select ticks and set labels
+        ticks = self.select_ticks(timestamps, scale_minutes)
+        ax.setTicks([[(ts, timestamp_to_str(ts)) for ts in ticks]])
+
+        # Rotate x-axis labels for better readability
+        ax.setTickFont(pg.QtGui.QFont('Arial', 8))
+       
+
+        # Set tick spacing based on the scale
+        tick_spacing = scale_minutes * 60  # Convert minutes to seconds
+        ax.setTickSpacing(major=tick_spacing, minor=tick_spacing/2)
+
+        # Adjust the view range to show all data points
+        plot_widget.setXRange(min(timestamps), max(timestamps))
+
+    def select_ticks(self, timestamps, scale_minutes):
+        """Select ticks at regular intervals based on the scale, ensuring start and end are included."""
+        if len(timestamps) <= 20:
+            return timestamps
+        
+        start = min(timestamps)
+        end = max(timestamps)
+        duration = end - start
+        
+        # Aim for about 20 ticks, but respect the minimum scale
+        interval = max(duration / 19, scale_minutes * 60)
+        
+        ticks = [start]
+        current = start + interval
+        while current < end:
+            ticks.append(current)
+            current += interval
+        ticks.append(end)
+        
+        return ticks

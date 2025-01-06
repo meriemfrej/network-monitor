@@ -2,7 +2,7 @@ import nmap
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 from PyQt5.QtCore import pyqtSignal, QThread, pyqtSlot, QRegExp
 from PyQt5.QtGui import  QRegExpValidator, QPalette, QColor
-from models import Database
+
 class NetworkScanner(QWidget):
     scan_complete = pyqtSignal(list)
     
@@ -74,14 +74,14 @@ class NetworkScannerWidget(QWidget):
         self.scan_button.clicked.connect(self.start_scan)
         self.table = QTableWidget()
         
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["IP", "Hostname", "Status", "Adresse MAC", "Actions"])
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["IP", "Hostname", "Status", "Adresse MAC"])
         header = self.table.horizontalHeader()       
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.Stretch)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
+       
         
         layout = QVBoxLayout()
         layout.addWidget(self.input_field)
@@ -118,7 +118,7 @@ class NetworkScannerWidget(QWidget):
                 padding: 8px 15px;
                 border-radius: 4px;
                 font-weight: bold;
-                transition: background-color 0.3s;
+                
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -195,17 +195,7 @@ class NetworkScannerWidget(QWidget):
             self.table.setItem(i, 1, QTableWidgetItem(hostname))
             self.table.setItem(i, 2, QTableWidgetItem(status))
             self.table.setItem(i, 3, QTableWidgetItem(adresse_mac))
-            db = Database("network_monitor.db")
-            existing_host = db.host_exists(ip)
-            if existing_host is False:
-                # Create a button to add the host
-                add_button = QPushButton("Ajouter hôte")
-                add_button.clicked.connect(lambda ip=ip, hostname=hostname: db.add_host(name=hostname, ip=ip))
-                self.table.setCellWidget(i, 4, add_button)
-                add_button.setEnabled(True)
-            else:
-                # If host already exists, don't show the add button
-                self.table.setItem(i, 4, QTableWidgetItem(""))
+            
 
     def closeEvent(self, event):
         if self.scan_thread is not None:

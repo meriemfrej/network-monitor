@@ -39,7 +39,7 @@ class ServiceOSDetection(QWidget):
                 padding: 8px 15px;
                 border-radius: 4px;
                 font-weight: bold;
-                transition: background-color 0.3s;
+                
             }
             QPushButton:hover {
                 background-color: #2980b9;

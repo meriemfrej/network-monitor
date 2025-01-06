@@ -44,12 +44,12 @@ class Latence(Metric):
             output = subprocess.check_output(cmd).decode(encoding="utf-8", errors="replace").split('\n')
             
             packets_sent = 4
-            packets_received = len([line for line in output if 'octets=32' in line]) # Updated packet received parsing
+            packets_received = len([line for line in output if 'bytes=32' in line or 'octets=32' in line]) # Updated packet received parsing
             
             packets_lost = packets_sent - packets_received
             
             for line in output:
-                if 'Moyenne' in line: # Updated average latency parsing
+                if 'Moyenne' in line or 'Average' in line: # Updated average latency parsing
                     avg_latency = float(line.split('=')[1].strip().split('ms')[0])
                     logger.info(f"Latency calculation complete. Avg latency: {avg_latency}ms, Packets lost: {packets_lost}")
                     return avg_latency, (packets_lost / packets_sent) * 100
@@ -72,12 +72,12 @@ class BandePassante(Metric):
     def calculer(self) -> tuple[float, float]:
         logger.info(f"Calculating bandwidth for host: {self.host.name} ({self.host.ip})")
         try:
-            st = speedtest.Speedtest(source_address=self.host.ip, secure=True)
+            st = speedtest.Speedtest(secure=True)
             logger.info("Starting download speed test")
             download = st.download() / 1_000_000  # Convert to Mbps
             logger.info(f"Download speed: {download:.2f} Mbps")
             
-            time.sleep(2)  # Add a 2-second delay to simulate longer operation
+            time.sleep(2)
             
             logger.info("Starting upload speed test")
             upload = st.upload() / 1_000_000  # Convert to Mbps
